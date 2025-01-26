@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multiple Cron Job Visualiser</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            padding: 0;
+            line-height: 1.5;
+        }
+        .CronJobVisualiser {
+            width: auto;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        .CronJobVisualiser td, .CronJobVisualiser th {
+            border: 1px solid #ddd;
+            text-align: center;
+            vertical-align: middle;
+            width: 30px;
+            height: 30px;
+        }
+        .CronJobVisualiser .hour {
+            font-weight: bold;
+            background-color: #f4f4f4;
+            width: 60px;
+        }
+        .CronJobVisualiser .running {
+            background-color: #4caf50;
+            color: white;
+            cursor: pointer;
+        }
+        .CronJobVisualiser .running-alt {
+            background-color: #ff9800;
+            color: white;
+            cursor: pointer;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .collapsible {
+            background-color: #f1f1f1;
+            color: #444;
+            cursor: pointer;
+            padding: 10px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+        }
+        .active, .collapsible:hover {
+            background-color: #ccc;
+        }
+        .content {
+            padding: 0 18px;
+            display: none;
+            overflow: hidden;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <footer>
+   Created by <a href="https://www.linkedin.com/in/mustafadincmd/" target="_blank">Mustafa Dinç</a>
+    </footer>
+    <h1>Multiple Cron Job Visualiser</h1>
+    <h4>Cron expression structure:</h4>
+    <input type="text" id="cronInput" placeholder="Enter cron expression" />
+    <button id="addJobButton">Add Job</button>
+
+    <button class="collapsible">Example Cron Expressions</button>
+    <div class="content">
+        <ul>
+            <li><code>0 0 * * *</code> - Runs every day at midnight.</li>
+            <li><code>*/5 * * * *</code> - Runs every 5 minutes.</li>
+            <li><code>0 12 * * 1-5</code> - Runs every weekday at noon.</li>
+            <li><code>0 9,17 * * *</code> - Runs every day at 09:00 and 17:00.</li>
+        </ul>
+    </div>
+
+    <script>
+        // Collapsible functionality
+        var coll = document.getElementsByClassName("collapsible");
+        for (let i = 0; i < coll.length; i++) {
+            coll[i].addEventListener("click", function() {
+                this.classList.toggle("active");
+                var content = this.nextElementSibling;
+                if (content.style.display === "block") {
+                    content.style.display = "none";
+                } else {
+                    content.style.display = "block";
+                }
+            });
+        }
+
+        class CronJobVisualiser {
+            constructor() {
+                this.jobs = [];
+                this.jobCounter = 1;
+            }
+
+            reset() {
+                this.jobs = [];
+                this.jobCounter = 1;
+            }
+
+            parseCron(value, type) {
+                const values = [];
+                if (value === '*') {
+                    const range = type === 'hour' ? 24 : 60;
+                    for (let i = 0; i < range; i++) values.push(i);
+                } else {
+                    value.split(',').forEach(part => {
+                        const [range, step = 1] = part.split('/');
+                        let from, to;
+
+                        if (range === '*') {
+                            from = 0;
+                            to = type === 'hour' ? 23 : 59;
+                        } else {
+                            const [start, end = start] = range.split('-').map(Number);
+                            from = start;
+                            to = end;
+                        }
+
+                        for (let i = from; i <= to; i += +step) {
+                            values.push(i);
+                        }
+                    });
+                }
+                return values;
+            }
+
+            addJob(name, cron) {
+                const parts = cron.split(' ');
+                const quartzExpression = parts.length === 6;
+                this.jobs.push({
+                    name,
+                    cron,
+                    minutes: this.parseCron(parts[quartzExpression ? 1 : 0], 'minute'),
+                    hours: this.parseCron(parts[quartzExpression ? 2 : 1], 'hour'),
+                });
+                this.updateTable();
+            }
+
+            updateTable() {
+                const existingTable = document.querySelector('.CronJobVisualiser');
+                if (existingTable) {
+                    existingTable.remove();
+                }
+
+                const table = document.createElement('table');
+                table.className = 'CronJobVisualiser';
+
+                // Başlık satırı (dakikalar)
+                const headerRow = document.createElement('tr');
+                headerRow.appendChild(document.createElement('td')); // Boş hücre
+                for (let minute = 0; minute < 60; minute++) {
+                    const th = document.createElement('th');
+                    th.textContent = minute < 10 ? `0${minute}` : minute;
+                    headerRow.appendChild(th);
+                }
+                table.appendChild(headerRow);
+
+                // Saat ve dakika hücreleri
+                for (let hour = 0; hour < 24; hour++) {
+                    const row = document.createElement('tr');
+                    const hourCell = document.createElement('td');
+                    hourCell.className = 'hour';
+                    hourCell.textContent = `${hour < 10 ? '0' : ''}${hour}:00`;
+                    row.appendChild(hourCell);
+
+                    for (let minute = 0; minute < 60; minute++) {
+                        const cell = document.createElement('td');
+                        const jobsAtThisTime = this.jobs.filter(job =>
+                            job.hours.includes(hour) && job.minutes.includes(minute)
+                        );
+
+                        if (jobsAtThisTime.length > 0) {
+                            cell.classList.add('running');
+                            if (jobsAtThisTime.length > 1) {
+                                cell.classList.add('running-alt');
+                            }
+
+                            // Hücreye tıklanabilirlik ekle
+                            cell.addEventListener('click', () => {
+                                const jobNames = jobsAtThisTime.map(job => `${job.name}: ${job.cron}`).join('\n');
+                                alert(`Bu saatte çalışan işler:\n${jobNames}`);
+                            });
+                        }
+
+                        row.appendChild(cell);
+                    }
+                    table.appendChild(row);
+                }
+
+                document.body.appendChild(table);
+            }
+        }
+
+        const visualiser = new CronJobVisualiser();
+
+        document.getElementById('addJobButton').addEventListener('click', () => {
+            const cronExpression = document.getElementById('cronInput').value.trim();
+            if (cronExpression) {
+                visualiser.addJob(`Job ${visualiser.jobCounter++}`, cronExpression);
+            } else {
+                alert("Please enter a valid cron expression.");
+            }
+        });
+    </script>
+
+</body>
+</html>
